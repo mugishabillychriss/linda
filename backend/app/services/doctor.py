@@ -20,13 +20,12 @@ and only after the user approves.
 
 import json
 import os
+from typing import Optional
 
-from openai import OpenAI  # Groq exposes an OpenAI-compatible endpoint
-
-client = OpenAI(
-    api_key=os.environ.get("GROQ_API_KEY"),
-    base_url="https://api.groq.com/openai/v1",
-)
+# Note: Groq exposes an OpenAI-compatible endpoint. We delay importing and
+# initializing the OpenAI client until it's actually needed so that simple
+# import-time checks (like CI smoke tests) don't fail when the API key isn't
+# present.
 
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 
@@ -51,7 +50,36 @@ standardize_dates, validate_numeric_columns, validate_email_addresses
 """
 
 
+def _create_client():
+    """Create and return an OpenAI-compatible client or None if the API key
+    is not configured.
+
+    This function intentionally imports the OpenAI client only when needed so
+    that importing this module doesn't require network credentials.
+    """
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        return None
+
+    # Import locally to avoid import-time side-effects when the key is absent.
+    from openai import OpenAI
+
+    return OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
+
+
 def diagnose(profile: dict) -> dict:
+    """Generate a JSON diagnosis for the provided statistical profile.
+
+    If the GROQ_API_KEY environment variable is not set, raise a clear
+    RuntimeError so callers can handle the absence of the LLM gracefully.
+    """
+    client = _create_client()
+    if client is None:
+        raise RuntimeError(
+            "GROQ_API_KEY is not set. The dataset diagnosis requires a Groq/OpenAI API key. "
+            "Set the GROQ_API_KEY environment variable or configure a client before calling diagnose()."
+        )
+
     response = client.chat.completions.create(
         model=GROQ_MODEL,
         max_tokens=1500,
