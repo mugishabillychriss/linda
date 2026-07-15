@@ -1,0 +1,39 @@
+# Runs on every push/PR. Render is connected directly to this GitHub repo
+# (via Render's dashboard, not via this file) and auto-deploys `main` after
+# it sees a passing commit -- so this workflow's job is to catch breakage
+# BEFORE it reaches Render, not to perform the deploy itself.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python -c "import app.main" # smoke test: app imports cleanly
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install
+      - run: npm run build

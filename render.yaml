@@ -1,0 +1,35 @@
+# Render "Blueprint" -- commit this at the repo root.
+# When you connect this GitHub repo to Render (New > Blueprint), Render
+# reads this file and provisions the service automatically, and will
+# redeploy on every push to the connected branch (default: main).
+#
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: doctor-linda-api
+    runtime: python
+    plan: starter
+    branch: main
+    rootDir: backend
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /health
+    envVars:
+      # Secrets: set these values in the Render dashboard after the first
+      # deploy (Service > Environment). Do NOT commit real values here --
+      # `sync: false` tells Render "this var exists, but I'll fill it in
+      # myself", so it won't be overwritten or exposed in the repo.
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        value: datasets
+      # Free tier, no credit card needed: https://console.groq.com/keys
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: FRONTEND_URL
+        sync: false # e.g. https://doctor-linda.vercel.app
