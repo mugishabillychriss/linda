@@ -20,12 +20,11 @@ and only after the user approves.
 
 import json
 import os
-from typing import Optional
 
-# Note: Groq exposes an OpenAI-compatible endpoint. We delay importing and
-# initializing the OpenAI client until it's actually needed so that simple
-# import-time checks (like CI smoke tests) don't fail when the API key isn't
-# present.
+# Groq exposes an OpenAI-compatible endpoint. The client is created lazily
+# (inside _create_client, called from diagnose) rather than at import time,
+# so importing this module never requires GROQ_API_KEY to be set -- this is
+# what lets CI's "import app.main" smoke test pass even without secrets.
 
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 
@@ -51,33 +50,22 @@ standardize_dates, validate_numeric_columns, validate_email_addresses
 
 
 def _create_client():
-    """Create and return an OpenAI-compatible client or None if the API key
-    is not configured.
-
-    This function intentionally imports the OpenAI client only when needed so
-    that importing this module doesn't require network credentials.
-    """
+    """Returns an OpenAI-compatible client pointed at Groq, or None if
+    GROQ_API_KEY isn't set. Imports openai locally so nothing network- or
+    credential-related happens at module import time."""
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         return None
-
-    # Import locally to avoid import-time side-effects when the key is absent.
     from openai import OpenAI
-
     return OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
 
 
 def diagnose(profile: dict) -> dict:
-    """Generate a JSON diagnosis for the provided statistical profile.
-
-    If the GROQ_API_KEY environment variable is not set, raise a clear
-    RuntimeError so callers can handle the absence of the LLM gracefully.
-    """
     client = _create_client()
     if client is None:
         raise RuntimeError(
-            "GROQ_API_KEY is not set. The dataset diagnosis requires a Groq/OpenAI API key. "
-            "Set the GROQ_API_KEY environment variable or configure a client before calling diagnose()."
+            "GROQ_API_KEY is not set. Set it in Render's environment "
+            "(or your local .env) before calling diagnose()."
         )
 
     response = client.chat.completions.create(

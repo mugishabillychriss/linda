@@ -16,6 +16,10 @@ services:
     startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
     healthCheckPath: /health
     envVars:
+      # Pinned so pandas gets a prebuilt wheel instead of compiling from
+      # source (pandas 2.2.2 has no wheel for newer Python versions yet).
+      - key: PYTHON_VERSION
+        value: 3.12.7
       # Secrets: set these values in the Render dashboard after the first
       # deploy (Service > Environment). Do NOT commit real values here --
       # `sync: false` tells Render "this var exists, but I'll fill it in
