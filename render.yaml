@@ -37,5 +37,3 @@ services:
         value: llama-3.3-70b-versatile
       - key: FRONTEND_URL
         sync: false # e.g. https://doctor-linda.vercel.app
-        - key: PYTHON_VERSION
-        value: 3.12.7

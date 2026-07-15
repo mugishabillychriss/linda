@@ -26,7 +26,7 @@ import os
 # so importing this module never requires GROQ_API_KEY to be set -- this is
 # what lets CI's "import app.main" smoke test pass even without secrets.
 
-GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 
 SYSTEM_PROMPT = """You are the AI Dataset Doctor inside Doctor Linda, an AI \
 data-preparation platform. Given a JSON statistical profile of a dataset, \

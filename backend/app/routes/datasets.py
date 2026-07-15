@@ -15,13 +15,14 @@ import os
 import uuid
 from tempfile import NamedTemporaryFile
 
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from pydantic import BaseModel
 
 from app.services.profiler import load_dataframe, profile_dataset
 from app.services.doctor import diagnose
 from app.services.cleaner import apply_operations
 from app.supabase_client import get_supabase, upload_dataset, download_dataset
+from app.auth import get_current_user
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 
@@ -31,8 +32,21 @@ class CleanRequest(BaseModel):
     operation_ids: list[str]
 
 
+@router.get("")
+async def list_datasets(user: dict = Depends(get_current_user)):
+    result = (
+        get_supabase()
+        .table("datasets")
+        .select("*")
+        .eq("owner_id", user["id"])
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return result.data
+
+
 @router.post("/upload")
-async def upload(file: UploadFile = File(...)):
+async def upload(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
     dataset_id = str(uuid.uuid4())
     suffix = os.path.splitext(file.filename)[1]
 
@@ -49,6 +63,7 @@ async def upload(file: UploadFile = File(...)):
     get_supabase().table("datasets").insert(
         {
             "id": dataset_id,
+            "owner_id": user["id"],
             "filename": file.filename,
             "storage_path": storage_path,
             "row_count": profile["row_count"],
@@ -62,8 +77,16 @@ async def upload(file: UploadFile = File(...)):
 
 
 @router.get("/{dataset_id}/diagnose")
-async def get_diagnosis(dataset_id: str):
-    result = get_supabase().table("datasets").select("*").eq("id", dataset_id).single().execute()
+async def get_diagnosis(dataset_id: str, user: dict = Depends(get_current_user)):
+    result = (
+        get_supabase()
+        .table("datasets")
+        .select("*")
+        .eq("id", dataset_id)
+        .eq("owner_id", user["id"])
+        .single()
+        .execute()
+    )
     if not result.data:
         raise HTTPException(404, "Dataset not found")
 
@@ -77,8 +100,16 @@ async def get_diagnosis(dataset_id: str):
 
 
 @router.post("/clean")
-async def clean(req: CleanRequest):
-    result = get_supabase().table("datasets").select("*").eq("id", req.dataset_id).single().execute()
+async def clean(req: CleanRequest, user: dict = Depends(get_current_user)):
+    result = (
+        get_supabase()
+        .table("datasets")
+        .select("*")
+        .eq("id", req.dataset_id)
+        .eq("owner_id", user["id"])
+        .single()
+        .execute()
+    )
     if not result.data:
         raise HTTPException(404, "Dataset not found")
 
