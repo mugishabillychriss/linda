@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   uploadDataset,
   getDiagnosis,
+  previewClean,
   cleanDataset,
   listDatasets,
   getDownloadUrl,
@@ -14,13 +15,21 @@ import Card from "../../../components/ui/Card";
 
 type Step = "upload" | "diagnosing" | "diagnosed" | "cleaning" | "cleaned";
 
-const STEP_ORDER: Step[] = ["upload", "diagnosing", "diagnosed", "cleaning", "cleaned"];
-const STEP_LABELS: Record<Step, string> = {
-  upload: "Upload",
-  diagnosing: "Diagnose",
-  diagnosed: "Diagnose",
-  cleaning: "Clean",
-  cleaned: "Download",
+const SEVERITY_STYLES: Record<string, string> = {
+  critical: "bg-alert/10 text-alert border-alert/30",
+  high: "bg-alert/10 text-alert border-alert/20",
+  medium: "bg-[#D6A93A]/10 text-[#8a6d1f] border-[#D6A93A]/30",
+  low: "bg-mint/10 text-mint border-mint/30",
+};
+
+const DIMENSION_LABELS: Record<string, string> = {
+  completeness: "Completeness",
+  uniqueness: "Uniqueness",
+  validity: "Validity",
+  consistency: "Consistency",
+  accuracy: "Accuracy",
+  integrity: "Integrity",
+  timeliness: "Timeliness",
 };
 
 function currentStageIndex(step: Step) {
@@ -30,13 +39,35 @@ function currentStageIndex(step: Step) {
   return 3;
 }
 
+// Groups approved problems into { operation_ids, columns } shaped exactly
+// how the backend's /preview and /clean endpoints expect them.
+function buildOperationPayload(problems: any[], approved: Set<number>) {
+  const opIds = new Set<string>();
+  const columns: Record<string, string[]> = {};
+  problems.forEach((p, i) => {
+    if (!approved.has(i)) return;
+    opIds.add(p.operation_id);
+    if (p.column) {
+      columns[p.operation_id] = columns[p.operation_id] || [];
+      if (!columns[p.operation_id].includes(p.column)) {
+        columns[p.operation_id].push(p.column);
+      }
+    }
+  });
+  return { operationIds: Array.from(opIds), columns };
+}
+
 export default function Dashboard() {
   const [step, setStep] = useState<Step>("upload");
   const [datasetId, setDatasetId] = useState<string | null>(null);
   const [diagnosis, setDiagnosis] = useState<any>(null);
+  const [approved, setApproved] = useState<Set<number>>(new Set());
+  const [previewChanges, setPreviewChanges] = useState<any[] | null>(null);
+  const [previewing, setPreviewing] = useState(false);
   const [error, setError] = useState("");
   const [history, setHistory] = useState<any[]>([]);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [report, setReport] = useState<any>(null);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -57,12 +88,15 @@ export default function Dashboard() {
     setError("");
     setDiagnosis(null);
     setDownloadUrl(null);
+    setPreviewChanges(null);
+    setReport(null);
     try {
       setStep("diagnosing");
       const { dataset_id } = await uploadDataset(file);
       setDatasetId(dataset_id);
       const diag = await getDiagnosis(dataset_id);
       setDiagnosis(diag);
+      setApproved(new Set(diag.problems.map((_: any, i: number) => i)));
       setStep("diagnosed");
       loadHistory();
     } catch (err: any) {
@@ -71,13 +105,39 @@ export default function Dashboard() {
     }
   }
 
-  async function handleClean() {
+  function toggleApproved(i: number) {
+    setApproved((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
+    setPreviewChanges(null);
+  }
+
+  async function handlePreview() {
+    if (!datasetId || !diagnosis) return;
+    setError("");
+    setPreviewing(true);
+    try {
+      const { operationIds, columns } = buildOperationPayload(diagnosis.problems, approved);
+      const { changes } = await previewClean(datasetId, operationIds, columns);
+      setPreviewChanges(changes);
+    } catch (err: any) {
+      setError(err.message || "Preview failed.");
+    } finally {
+      setPreviewing(false);
+    }
+  }
+
+  async function handleApply() {
     if (!datasetId || !diagnosis) return;
     setError("");
     try {
       setStep("cleaning");
-      const ops = diagnosis.problems.map((p: any) => p.operation_id);
-      await cleanDataset(datasetId, ops);
+      const { operationIds, columns } = buildOperationPayload(diagnosis.problems, approved);
+      const result = await cleanDataset(datasetId, operationIds, columns);
+      setReport(result.report);
       const { url } = await getDownloadUrl(datasetId, "cleaned");
       setDownloadUrl(url);
       setStep("cleaned");
@@ -93,13 +153,15 @@ export default function Dashboard() {
     setDatasetId(null);
     setDiagnosis(null);
     setDownloadUrl(null);
+    setPreviewChanges(null);
+    setReport(null);
     setError("");
   }
 
   const stageIdx = currentStageIndex(step);
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10 grid md:grid-cols-[1fr_280px] gap-10">
+    <div className="max-w-6xl mx-auto px-6 py-10 grid md:grid-cols-[1fr_280px] gap-10">
       <div>
         {/* Step indicator */}
         <div className="flex items-center gap-2 mb-10">
@@ -156,52 +218,199 @@ export default function Dashboard() {
 
         {/* Diagnosed */}
         {(step === "diagnosed" || step === "cleaning") && diagnosis && (
-          <Card className="p-8">
-            <div className="flex items-start gap-8 mb-6">
-              <Gauge score={diagnosis.quality_score} size={160} label="current" />
-              <div>
-                <p className="text-sm text-slate mb-1">Estimated after cleaning</p>
-                <p className="font-display text-3xl font-semibold text-mint">
-                  {Math.round(diagnosis.estimated_quality_after_cleaning)}
-                </p>
-              </div>
-            </div>
-            <p className="text-sm leading-relaxed mb-6">{diagnosis.summary}</p>
-            <div className="space-y-3 mb-6">
-              {diagnosis.problems.map((p: any, i: number) => (
-                <div key={i} className="border border-ink/10 rounded-md p-4">
-                  <p className="font-medium text-sm mb-1">{p.issue}</p>
-                  <p className="text-slate text-sm mb-2">{p.why_it_matters}</p>
-                  <p className="font-mono text-xs text-signal">→ {p.recommended_fix}</p>
+          <div className="space-y-6">
+            <Card className="p-8">
+              <div className="flex items-start gap-8 mb-6">
+                <Gauge score={diagnosis.quality_score} size={160} label="current" />
+                <div>
+                  <p className="text-sm text-slate mb-1">Estimated after cleaning</p>
+                  <p className="font-display text-3xl font-semibold text-mint">
+                    {Math.round(diagnosis.estimated_quality_after_cleaning)}
+                  </p>
                 </div>
-              ))}
-            </div>
-            <Button onClick={handleClean} disabled={step === "cleaning"}>
-              {step === "cleaning" ? "Cleaning..." : "Apply recommended fixes"}
-            </Button>
-          </Card>
+              </div>
+              <p className="text-sm leading-relaxed">{diagnosis.summary}</p>
+
+              {diagnosis.insights?.length > 0 && (
+                <div className="mt-5 pt-5 border-t border-ink/10">
+                  <p className="text-xs font-mono uppercase tracking-wide text-slate mb-2">
+                    Smart insights
+                  </p>
+                  <ul className="space-y-1.5">
+                    {diagnosis.insights.map((insight: string, i: number) => (
+                      <li key={i} className="text-sm flex gap-2">
+                        <span className="text-signal">•</span>
+                        {insight}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </Card>
+
+            <Card className="p-6">
+              <p className="font-display font-semibold mb-4">
+                Issues found -- uncheck anything you don&apos;t want fixed
+              </p>
+              <div className="space-y-3">
+                {diagnosis.problems.map((p: any, i: number) => (
+                  <label
+                    key={i}
+                    className={`flex items-start gap-3 border rounded-md p-4 cursor-pointer ${
+                      SEVERITY_STYLES[p.severity] || "border-ink/10"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={approved.has(i)}
+                      onChange={() => toggleApproved(i)}
+                      className="mt-1"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium text-sm text-ink">{p.issue}</span>
+                        <span className="font-mono text-[10px] uppercase px-1.5 py-0.5 rounded bg-ink/5 text-slate">
+                          {p.severity}
+                        </span>
+                        {p.column && (
+                          <span className="font-mono text-[10px] text-slate">{p.column}</span>
+                        )}
+                      </div>
+                      <p className="text-sm text-slate mb-1">{p.why_it_matters}</p>
+                      <p className="font-mono text-xs text-signal">→ {p.recommended_fix}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <Button
+                  variant="secondary"
+                  onClick={handlePreview}
+                  disabled={previewing || approved.size === 0}
+                >
+                  {previewing ? "Loading preview..." : "Preview changes"}
+                </Button>
+                <Button onClick={handleApply} disabled={step === "cleaning" || approved.size === 0}>
+                  {step === "cleaning" ? "Applying..." : "Apply approved fixes"}
+                </Button>
+              </div>
+            </Card>
+
+            {previewChanges && (
+              <Card className="p-6">
+                <p className="font-display font-semibold mb-4">
+                  Preview ({previewChanges.length} sample changes)
+                </p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs font-mono uppercase text-slate border-b border-ink/10">
+                        <th className="pb-2 pr-4">Operation</th>
+                        <th className="pb-2 pr-4">Column</th>
+                        <th className="pb-2 pr-4">Before</th>
+                        <th className="pb-2">After</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {previewChanges.map((c, i) => (
+                        <tr key={i} className="border-b border-ink/5">
+                          <td className="py-2 pr-4 font-mono text-xs text-slate">
+                            {c.operation_id}
+                          </td>
+                          <td className="py-2 pr-4">{c.column || "—"}</td>
+                          <td className="py-2 pr-4 text-alert">
+                            {c.type === "row_count_change"
+                              ? `${c.before_rows} rows`
+                              : c.type === "column_added"
+                              ? "(new column)"
+                              : String(c.before ?? "∅")}
+                          </td>
+                          <td className="py-2 text-mint">
+                            {c.type === "row_count_change"
+                              ? `${c.after_rows} rows`
+                              : c.type === "column_added"
+                              ? c.sample_values?.join(", ")
+                              : String(c.after ?? "∅")}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            )}
+          </div>
         )}
 
         {/* Cleaned / done */}
         {step === "cleaned" && (
-          <Card className="p-10 text-center">
-            <p className="font-display text-lg font-semibold mb-2 text-mint">
-              Your dataset is ready
-            </p>
-            <p className="text-slate text-sm mb-6">
-              Cleaned and saved. Download it below.
-            </p>
-            <div className="flex gap-3 justify-center">
-              {downloadUrl && (
-                <a href={downloadUrl} download>
-                  <Button>Download cleaned dataset</Button>
-                </a>
-              )}
-              <Button variant="secondary" onClick={reset}>
-                Clean another
-              </Button>
-            </div>
-          </Card>
+          <div className="space-y-6">
+            <Card className="p-10 text-center">
+              <p className="font-display text-lg font-semibold mb-2 text-mint">
+                Your dataset is ready
+              </p>
+              <p className="text-slate text-sm mb-6">Cleaned and saved. Download it below.</p>
+              <div className="flex gap-3 justify-center">
+                {downloadUrl && (
+                  <a href={downloadUrl} download>
+                    <Button>Download cleaned dataset</Button>
+                  </a>
+                )}
+                <Button variant="secondary" onClick={reset}>
+                  Clean another
+                </Button>
+              </div>
+            </Card>
+
+            {report && (
+              <Card className="p-6">
+                <p className="font-display font-semibold mb-4">Cleaning report</p>
+                <div className="grid grid-cols-2 gap-6 mb-6">
+                  <div>
+                    <p className="text-xs text-slate mb-1">Quality score</p>
+                    <p className="font-mono text-sm">
+                      {report.quality_score_before} → {report.quality_score_after}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate mb-1">Rows</p>
+                    <p className="font-mono text-sm">
+                      {report.rows_before} → {report.rows_after}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate mb-1">Issues remaining</p>
+                    <p className="font-mono text-sm">
+                      {report.issues_before} → {report.issues_after}
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {Object.entries(report.dimensions_after).map(([key, val]) => {
+                    if (val === null) return null;
+                    const before = report.dimensions_before[key];
+                    return (
+                      <div key={key}>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-slate">{DIMENSION_LABELS[key] || key}</span>
+                          <span className="font-mono text-slate">
+                            {before} → {val as number}
+                          </span>
+                        </div>
+                        <div className="h-1.5 bg-ink/5 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-signal rounded-full"
+                            style={{ width: `${val}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            )}
+          </div>
         )}
       </div>
 
@@ -218,9 +427,7 @@ export default function Dashboard() {
             <Card key={d.id} className="p-4">
               <p className="text-sm font-medium truncate mb-1">{d.filename}</p>
               <div className="flex justify-between items-center">
-                <span className="font-mono text-xs text-slate">
-                  {d.row_count} rows
-                </span>
+                <span className="font-mono text-xs text-slate">{d.row_count} rows</span>
                 <span className="font-mono text-xs text-signal">
                   {Math.round(d.quality_score)}
                 </span>

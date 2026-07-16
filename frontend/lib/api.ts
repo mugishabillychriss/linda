@@ -33,11 +33,29 @@ export async function getDiagnosis(datasetId: string) {
   return res.json();
 }
 
-export async function cleanDataset(datasetId: string, operationIds: string[]) {
+export async function previewClean(
+  datasetId: string,
+  operationIds: string[],
+  columns: Record<string, string[]> = {}
+) {
+  const res = await fetch(`${API_URL}/datasets/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+    body: JSON.stringify({ dataset_id: datasetId, operation_ids: operationIds, columns }),
+  });
+  if (!res.ok) throw new Error(`Preview failed: ${res.status}`);
+  return res.json();
+}
+
+export async function cleanDataset(
+  datasetId: string,
+  operationIds: string[],
+  columns: Record<string, string[]> = {}
+) {
   const res = await fetch(`${API_URL}/datasets/clean`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...(await authHeaders()) },
-    body: JSON.stringify({ dataset_id: datasetId, operation_ids: operationIds }),
+    body: JSON.stringify({ dataset_id: datasetId, operation_ids: operationIds, columns }),
   });
   if (!res.ok) throw new Error(`Clean failed: ${res.status}`);
   return res.json();

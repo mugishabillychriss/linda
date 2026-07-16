@@ -92,3 +92,94 @@ def apply_operations(df: pd.DataFrame, operation_ids: list[str], options: dict |
             raise ValueError(f"Unknown operation: {op_id}")
         out = fn(out, **options.get(op_id, {}))
     return out
+
+
+def _jsonable(val):
+    """Converts a raw cell value into something JSON can actually encode --
+    pandas/numpy NaN serializes as the bare token NaN, which is not valid
+    JSON and breaks JS's JSON.parse() on the frontend, so it becomes None
+    instead. Numpy scalar types are converted to native Python types."""
+    if pd.isna(val):
+        return None
+    if hasattr(val, "item"):
+        return val.item()
+    return val
+
+
+def preview_operations(
+    df: pd.DataFrame, operation_ids: list[str], options: dict | None = None, sample_size: int = 15
+) -> list[dict]:
+    """Runs each operation individually against the ORIGINAL dataframe (never
+    mutating it) and returns a sample of before/after cell-level changes, so
+    the user can see exactly what each operation would do before approving
+    it. This is what the dashboard's preview/approve step calls -- actually
+    applying changes only happens in apply_operations, and only for
+    operations the user has approved."""
+    options = options or {}
+    changes = []
+
+    for op_id in operation_ids:
+        fn = OPERATIONS.get(op_id)
+        if not fn:
+            continue
+        before = df.copy()
+        after = fn(before.copy(), **options.get(op_id, {}))
+
+        # Row-count-changing operations (dedupe, drop-empty) are shown as a
+        # single summary change rather than a per-cell diff, since "row 47
+        # removed" isn't a before/after cell pair.
+        if len(after) != len(before):
+            changes.append(
+                {
+                    "operation_id": op_id,
+                    "type": "row_count_change",
+                    "before_rows": int(len(before)),
+                    "after_rows": int(len(after)),
+                }
+            )
+            continue
+
+        common_cols = [c for c in before.columns if c in after.columns]
+        new_cols = [c for c in after.columns if c not in before.columns]
+        sample_added = 0
+
+        for col in new_cols:
+            if sample_added >= sample_size:
+                break
+            changes.append(
+                {
+                    "operation_id": op_id,
+                    "type": "column_added",
+                    "column": col,
+                    "sample_values": [_jsonable(v) for v in after[col].head(3).tolist()],
+                }
+            )
+            sample_added += 1
+
+        for col in common_cols:
+            if sample_added >= sample_size:
+                break
+            b_series = before[col]
+            a_series = after[col]
+            # NaN != NaN is always True in pandas/numpy, so without this,
+            # every untouched row containing a missing value would be
+            # falsely reported as "changed" by every operation.
+            both_na = b_series.isna() & a_series.isna()
+            diff_mask = ~both_na & (b_series.astype(str) != a_series.astype(str))
+            diff_idx = before.index[diff_mask]
+            for idx in diff_idx[: sample_size - sample_added]:
+                changes.append(
+                    {
+                        "operation_id": op_id,
+                        "type": "cell_change",
+                        "row": int(idx),
+                        "column": col,
+                        "before": _jsonable(before.at[idx, col]),
+                        "after": _jsonable(after.at[idx, col]),
+                    }
+                )
+                sample_added += 1
+                if sample_added >= sample_size:
+                    break
+
+    return changes

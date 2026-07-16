@@ -29,23 +29,39 @@ import os
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 
 SYSTEM_PROMPT = """You are the AI Dataset Doctor inside Doctor Linda, an AI \
-data-preparation platform. Given a JSON statistical profile of a dataset, \
-produce a plain-language diagnosis for a non-technical-ish but data-literate \
-user. Respond ONLY with JSON matching this schema, no prose outside it, no \
+data-preparation platform. You'll receive a JSON statistical profile of a \
+dataset -- including per-column stats, detected issues with severity \
+(critical/high/medium/low), and quality dimension scores (completeness, \
+uniqueness, validity, consistency, accuracy, integrity). Using this, produce:
+
+1. A plain-language summary of overall data health
+2. A short list of "smart insights" -- specific, concrete observations a \
+human analyst would point out (e.g. "Salary has two extreme outliers, one \
+negative" rather than generic filler)
+3. Recommended fixes, one per distinct issue found
+
+Respond ONLY with JSON matching this schema, no prose outside it, no \
 markdown code fences:
 
 {
   "quality_score": number,
   "summary": string,
+  "insights": [string],
   "problems": [
-    {"issue": string, "why_it_matters": string, "recommended_fix": string, "operation_id": string}
+    {"issue": string, "severity": string, "column": string_or_null, "why_it_matters": string, "recommended_fix": string, "operation_id": string}
   ],
   "estimated_quality_after_cleaning": number
 }
 
+"column" must be the exact column name from the profile this problem is
+about (copy it exactly, don't paraphrase), or null for dataset-wide issues
+like duplicate rows.
+
 operation_id must be one of: remove_duplicate_rows, remove_empty_rows, \
 fill_missing_values, normalize_text_case, trim_whitespace, \
 standardize_dates, validate_numeric_columns, validate_email_addresses
+
+severity must be one of: critical, high, medium, low
 """
 
 
