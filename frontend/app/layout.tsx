@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, Inter, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
+import { ToastProvider } from "../components/ui/Toast";
 
 const fraunces = Fraunces({
   subsets: ["latin"],
@@ -26,7 +27,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${fraunces.variable} ${inter.variable} ${plexMono.variable}`}>
-      <body className="font-body bg-paper text-ink">{children}</body>
+      <body className="font-body bg-paper text-ink">
+        <ToastProvider>{children}</ToastProvider>
+      </body>
     </html>
   );
 }

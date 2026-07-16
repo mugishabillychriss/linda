@@ -47,7 +47,10 @@ export default function SignupPage() {
         <p className="font-mono text-xs uppercase tracking-widest text-signal mb-2">
           Doctor Linda
         </p>
-        <h1 className="font-display text-2xl font-semibold mb-6">Create your account</h1>
+        <h1 className="font-display text-2xl font-semibold mb-2">Create your account</h1>
+        <p className="text-slate text-sm mb-6">
+          Start your 14-day free trial. No credit card required.
+        </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1.5">Email</label>

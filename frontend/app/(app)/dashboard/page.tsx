@@ -12,6 +12,7 @@ import {
 import Gauge from "../../../components/ui/Gauge";
 import Button from "../../../components/ui/Button";
 import Card from "../../../components/ui/Card";
+import { useToast } from "../../../components/ui/Toast";
 
 type Step = "upload" | "diagnosing" | "diagnosed" | "cleaning" | "cleaned";
 
@@ -58,6 +59,7 @@ function buildOperationPayload(problems: any[], approved: Set<number>) {
 }
 
 export default function Dashboard() {
+  const { notify } = useToast();
   const [step, setStep] = useState<Step>("upload");
   const [datasetId, setDatasetId] = useState<string | null>(null);
   const [diagnosis, setDiagnosis] = useState<any>(null);
@@ -94,13 +96,17 @@ export default function Dashboard() {
       setStep("diagnosing");
       const { dataset_id } = await uploadDataset(file);
       setDatasetId(dataset_id);
+      notify("Dataset uploaded.", "success");
       const diag = await getDiagnosis(dataset_id);
       setDiagnosis(diag);
       setApproved(new Set(diag.problems.map((_: any, i: number) => i)));
       setStep("diagnosed");
+      notify("Diagnosis ready.", "success");
       loadHistory();
     } catch (err: any) {
-      setError(err.message || "Something went wrong during upload/diagnosis.");
+      const message = err.message || "Something went wrong during upload/diagnosis.";
+      setError(message);
+      notify(message, "error");
       setStep("upload");
     }
   }
@@ -124,7 +130,9 @@ export default function Dashboard() {
       const { changes } = await previewClean(datasetId, operationIds, columns);
       setPreviewChanges(changes);
     } catch (err: any) {
-      setError(err.message || "Preview failed.");
+      const message = err.message || "Preview failed.";
+      setError(message);
+      notify(message, "error");
     } finally {
       setPreviewing(false);
     }
@@ -141,9 +149,12 @@ export default function Dashboard() {
       const { url } = await getDownloadUrl(datasetId, "cleaned");
       setDownloadUrl(url);
       setStep("cleaned");
+      notify("Fixes applied. Your download is ready.", "success");
       loadHistory();
     } catch (err: any) {
-      setError(err.message || "Something went wrong while cleaning.");
+      const message = err.message || "Something went wrong while cleaning.";
+      setError(message);
+      notify(message, "error");
       setStep("diagnosed");
     }
   }
@@ -163,6 +174,14 @@ export default function Dashboard() {
   return (
     <div className="max-w-6xl mx-auto px-6 py-10 grid md:grid-cols-[1fr_280px] gap-10">
       <div>
+        <div className="mb-8">
+          <h1 className="font-display text-2xl font-semibold mb-1">Clean a dataset</h1>
+          <p className="text-slate text-sm">
+            Upload a file to get a plain-language quality diagnosis. Nothing is changed
+            until you approve it.
+          </p>
+        </div>
+
         {/* Step indicator */}
         <div className="flex items-center gap-2 mb-10">
           {(["Upload", "Diagnose", "Clean", "Download"] as const).map((label, i) => (
@@ -192,7 +211,10 @@ export default function Dashboard() {
         {step === "upload" && (
           <Card className="p-10 text-center border-dashed">
             <p className="font-display text-lg font-semibold mb-2">Upload a dataset</p>
-            <p className="text-slate text-sm mb-6">CSV, Excel (.xlsx), or JSON</p>
+            <p className="text-slate text-sm mb-1">CSV, Excel (.xlsx), or JSON</p>
+            <p className="text-slate text-xs mb-6">
+              Your file is analyzed immediately. We never modify the original.
+            </p>
             <label className="inline-block">
               <input
                 type="file"
