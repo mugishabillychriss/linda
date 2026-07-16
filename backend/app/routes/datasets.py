@@ -20,7 +20,7 @@ from pydantic import BaseModel
 
 from app.services.profiler import load_dataframe, profile_dataset
 from app.services.doctor import diagnose
-from app.services.cleaner import apply_operations, preview_operations
+from app.services.cleaner import apply_operations, preview_operations, jsonable_value
 from app.supabase_client import get_supabase, upload_dataset, download_dataset, get_signed_url
 from app.auth import get_current_user
 
@@ -209,10 +209,15 @@ async def clean(req: CleanRequest, user: dict = Depends(get_current_user)):
     os.remove(tmp_path)
     os.remove(out_path)
 
+    preview_records = [
+        {k: jsonable_value(v) for k, v in row.items()}
+        for row in cleaned.head(20).to_dict(orient="records")
+    ]
+
     return {
         "dataset_id": req.dataset_id,
         "cleaned_storage_path": cleaned_storage_path,
-        "preview": cleaned.head(20).to_dict(orient="records"),
+        "preview": preview_records,
         "report": {
             "rows_before": before_profile["row_count"],
             "rows_after": after_profile["row_count"],

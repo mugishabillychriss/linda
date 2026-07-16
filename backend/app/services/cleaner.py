@@ -94,11 +94,12 @@ def apply_operations(df: pd.DataFrame, operation_ids: list[str], options: dict |
     return out
 
 
-def _jsonable(val):
+def jsonable_value(val):
     """Converts a raw cell value into something JSON can actually encode --
     pandas/numpy NaN serializes as the bare token NaN, which is not valid
-    JSON and breaks JS's JSON.parse() on the frontend, so it becomes None
-    instead. Numpy scalar types are converted to native Python types."""
+    JSON and breaks JS's JSON.parse() on the frontend (and Starlette's own
+    JSONResponse rejects it outright), so it becomes None instead. Numpy
+    scalar types are converted to native Python types."""
     if pd.isna(val):
         return None
     if hasattr(val, "item"):
@@ -151,7 +152,7 @@ def preview_operations(
                     "operation_id": op_id,
                     "type": "column_added",
                     "column": col,
-                    "sample_values": [_jsonable(v) for v in after[col].head(3).tolist()],
+                    "sample_values": [jsonable_value(v) for v in after[col].head(3).tolist()],
                 }
             )
             sample_added += 1
@@ -174,8 +175,8 @@ def preview_operations(
                         "type": "cell_change",
                         "row": int(idx),
                         "column": col,
-                        "before": _jsonable(before.at[idx, col]),
-                        "after": _jsonable(after.at[idx, col]),
+                        "before": jsonable_value(before.at[idx, col]),
+                        "after": jsonable_value(after.at[idx, col]),
                     }
                 )
                 sample_added += 1
