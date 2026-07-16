@@ -3,6 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "../../../lib/supabase/client";
+import Button from "../../../components/ui/Button";
+import Card from "../../../components/ui/Card";
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
@@ -27,60 +29,59 @@ export default function SignupPage() {
 
   if (done) {
     return (
-      <main className="flex min-h-screen items-center justify-center p-8">
-        <div className="w-full max-w-sm text-center">
-          <h1 className="text-2xl font-bold mb-4">Check your email</h1>
-          <p className="text-gray-600">
-            We sent a confirmation link to <strong>{email}</strong>. Click it to activate your
-            account, then log in.
+      <main className="min-h-screen flex items-center justify-center px-6 bg-paper">
+        <Card className="w-full max-w-sm p-8 text-center">
+          <h1 className="font-display text-2xl font-semibold mb-3">Check your email</h1>
+          <p className="text-slate text-sm">
+            We sent a confirmation link to <strong className="text-ink">{email}</strong>. Click
+            it to activate your account, then log in.
           </p>
-        </div>
+        </Card>
       </main>
     );
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-8">
-      <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-bold mb-6">Create your account</h1>
+    <main className="min-h-screen flex items-center justify-center px-6 bg-paper">
+      <Card className="w-full max-w-sm p-8">
+        <p className="font-mono text-xs uppercase tracking-widest text-signal mb-2">
+          Doctor Linda
+        </p>
+        <h1 className="font-display text-2xl font-semibold mb-6">Create your account</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Email</label>
+            <label className="block text-sm font-medium mb-1.5">Email</label>
             <input
               type="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full border rounded px-3 py-2"
+              className="w-full border border-ink/15 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-signal/40 focus:border-signal"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Password</label>
+            <label className="block text-sm font-medium mb-1.5">Password</label>
             <input
               type="password"
               required
               minLength={6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full border rounded px-3 py-2"
+              className="w-full border border-ink/15 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-signal/40 focus:border-signal"
             />
           </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-black text-white rounded px-4 py-2 disabled:opacity-50"
-          >
+          {error && <p className="text-sm text-alert">{error}</p>}
+          <Button type="submit" disabled={loading} className="w-full">
             {loading ? "Creating account..." : "Sign up"}
-          </button>
+          </Button>
         </form>
-        <p className="mt-4 text-sm text-gray-600">
+        <p className="mt-5 text-sm text-slate">
           Already have an account?{" "}
-          <Link href="/login" className="underline">
+          <Link href="/login" className="text-signal font-medium hover:underline">
             Log in
           </Link>
         </p>
-      </div>
+      </Card>
     </main>
   );
 }

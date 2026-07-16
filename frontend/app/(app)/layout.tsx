@@ -13,11 +13,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="min-h-screen">
-      <nav className="border-b px-6 py-4 flex justify-between items-center">
-        <span className="font-bold">Doctor Linda</span>
-        <div className="flex items-center gap-4 text-sm text-gray-600">
-          <span>{user.email}</span>
+    <div className="min-h-screen bg-paper">
+      <nav className="border-b border-ink/10 px-6 py-4 flex justify-between items-center bg-white">
+        <span className="font-display font-semibold text-lg">Doctor Linda</span>
+        <div className="flex items-center gap-4 text-sm text-slate">
+          <span className="font-mono text-xs">{user.email}</span>
           <LogoutButton />
         </div>
       </nav>

@@ -46,3 +46,12 @@ def download_dataset(storage_path: str, local_path: str) -> str:
     with open(local_path, "wb") as f:
         f.write(data)
     return local_path
+
+
+def get_signed_url(storage_path: str, expires_in: int = 3600) -> str:
+    """Returns a temporary signed URL the browser can use to download a
+    file directly from Supabase Storage, without routing the bytes
+    through our own backend."""
+    sb = get_supabase()
+    result = sb.storage.from_(SUPABASE_STORAGE_BUCKET).create_signed_url(storage_path, expires_in)
+    return result["signedURL"] if "signedURL" in result else result.get("signed_url")

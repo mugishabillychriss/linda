@@ -48,3 +48,11 @@ export async function listDatasets() {
   if (!res.ok) throw new Error(`List failed: ${res.status}`);
   return res.json();
 }
+
+export async function getDownloadUrl(datasetId: string, kind: "raw" | "cleaned" = "cleaned") {
+  const res = await fetch(`${API_URL}/datasets/${datasetId}/download?kind=${kind}`, {
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error(`Download link failed: ${res.status}`);
+  return res.json();
+}

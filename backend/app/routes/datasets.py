@@ -21,7 +21,7 @@ from pydantic import BaseModel
 from app.services.profiler import load_dataframe, profile_dataset
 from app.services.doctor import diagnose
 from app.services.cleaner import apply_operations
-from app.supabase_client import get_supabase, upload_dataset, download_dataset
+from app.supabase_client import get_supabase, upload_dataset, download_dataset, get_signed_url
 from app.auth import get_current_user
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
@@ -97,6 +97,35 @@ async def get_diagnosis(dataset_id: str, user: dict = Depends(get_current_user))
     os.remove(tmp_path)
 
     return diagnose(profile)
+
+
+@router.get("/{dataset_id}/download")
+async def get_download_url(
+    dataset_id: str, kind: str = "cleaned", user: dict = Depends(get_current_user)
+):
+    result = (
+        get_supabase()
+        .table("datasets")
+        .select("*")
+        .eq("id", dataset_id)
+        .eq("owner_id", user["id"])
+        .single()
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(404, "Dataset not found")
+
+    if kind == "cleaned":
+        storage_path = f"cleaned/{dataset_id}/{result.data['filename']}"
+    else:
+        storage_path = result.data["storage_path"]
+
+    try:
+        url = get_signed_url(storage_path)
+    except Exception:
+        raise HTTPException(404, "No cleaned file yet -- run /datasets/clean first")
+
+    return {"url": url}
 
 
 @router.post("/clean")
