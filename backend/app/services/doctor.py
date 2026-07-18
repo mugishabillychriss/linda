@@ -65,6 +65,13 @@ severity must be one of: critical, high, medium, low
 """
 
 
+class DiagnosisUnavailable(Exception):
+    """Raised when the AI diagnosis genuinely can't be produced right now
+    (rate limit, timeout, bad response) -- as opposed to a bug. The route
+    layer catches this and returns a clean 503 with a friendly message
+    instead of a raw 500 stack trace."""
+
+
 def _create_client():
     """Returns an OpenAI-compatible client pointed at Groq, or None if
     GROQ_API_KEY isn't set. Imports openai locally so nothing network- or
@@ -79,20 +86,47 @@ def _create_client():
 def diagnose(profile: dict) -> dict:
     client = _create_client()
     if client is None:
-        raise RuntimeError(
-            "GROQ_API_KEY is not set. Set it in Render's environment "
-            "(or your local .env) before calling diagnose()."
+        raise DiagnosisUnavailable(
+            "The AI diagnosis service isn't configured yet. Try again shortly, "
+            "or contact support if this keeps happening."
         )
 
-    response = client.chat.completions.create(
-        model=GROQ_MODEL,
-        max_tokens=1500,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": json.dumps(profile)},
-        ],
-        response_format={"type": "json_object"},
-    )
+    from openai import APIError, APITimeoutError, RateLimitError
+
+    try:
+        response = client.chat.completions.create(
+            model=GROQ_MODEL,
+            max_tokens=1500,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": json.dumps(profile)},
+            ],
+            response_format={"type": "json_object"},
+            timeout=30,
+        )
+    except RateLimitError:
+        raise DiagnosisUnavailable(
+            "We're getting a lot of diagnosis requests right now and hit a rate "
+            "limit. Please try again in about a minute."
+        )
+    except APITimeoutError:
+        raise DiagnosisUnavailable(
+            "The diagnosis took too long to generate. Please try again -- this "
+            "is usually a temporary hiccup."
+        )
+    except APIError:
+        raise DiagnosisUnavailable(
+            "The AI diagnosis service is temporarily unavailable. Please try "
+            "again in a few minutes."
+        )
+
     text = response.choices[0].message.content
     text = text.strip().removeprefix("```json").removesuffix("```").strip()
-    return json.loads(text)
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        raise DiagnosisUnavailable(
+            "We got an unexpected response while diagnosing your dataset. "
+            "Please try again."
+        )

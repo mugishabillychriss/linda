@@ -5,12 +5,18 @@ create table if not exists datasets (
   id uuid primary key,
   owner_id uuid references auth.users (id),
   filename text not null,
+  display_name text,
   storage_path text not null,
   row_count int,
   column_count int,
   quality_score numeric,
   created_at timestamptz default now()
 );
+
+-- If you already ran this schema before display_name existed, run this
+-- separately instead of the create table above (it's already been created):
+-- alter table datasets add column if not exists display_name text;
+-- update datasets set display_name = filename where display_name is null;
 
 alter table datasets enable row level security;
 

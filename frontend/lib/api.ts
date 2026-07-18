@@ -13,6 +13,23 @@ async function authHeaders() {
   return { Authorization: `Bearer ${session?.access_token ?? ""}` };
 }
 
+// Extracts the backend's own error message (FastAPI returns {"detail": "..."}
+// on HTTPException) so the user sees "we hit a rate limit, try again in a
+// minute" instead of a bare "Diagnosis failed: 503".
+async function handleResponse(res: Response) {
+  if (!res.ok) {
+    let detail = `Request failed (${res.status})`;
+    try {
+      const body = await res.json();
+      if (body?.detail) detail = body.detail;
+    } catch {
+      // Response wasn't JSON -- fall back to the generic message above.
+    }
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
 export async function uploadDataset(file: File) {
   const form = new FormData();
   form.append("file", file);
@@ -21,16 +38,14 @@ export async function uploadDataset(file: File) {
     headers: await authHeaders(),
     body: form,
   });
-  if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-  return res.json();
+  return handleResponse(res);
 }
 
 export async function getDiagnosis(datasetId: string) {
   const res = await fetch(`${API_URL}/datasets/${datasetId}/diagnose`, {
     headers: await authHeaders(),
   });
-  if (!res.ok) throw new Error(`Diagnosis failed: ${res.status}`);
-  return res.json();
+  return handleResponse(res);
 }
 
 export async function previewClean(
@@ -43,8 +58,7 @@ export async function previewClean(
     headers: { "Content-Type": "application/json", ...(await authHeaders()) },
     body: JSON.stringify({ dataset_id: datasetId, operation_ids: operationIds, columns }),
   });
-  if (!res.ok) throw new Error(`Preview failed: ${res.status}`);
-  return res.json();
+  return handleResponse(res);
 }
 
 export async function cleanDataset(
@@ -57,20 +71,34 @@ export async function cleanDataset(
     headers: { "Content-Type": "application/json", ...(await authHeaders()) },
     body: JSON.stringify({ dataset_id: datasetId, operation_ids: operationIds, columns }),
   });
-  if (!res.ok) throw new Error(`Clean failed: ${res.status}`);
-  return res.json();
+  return handleResponse(res);
 }
 
 export async function listDatasets() {
   const res = await fetch(`${API_URL}/datasets`, { headers: await authHeaders() });
-  if (!res.ok) throw new Error(`List failed: ${res.status}`);
-  return res.json();
+  return handleResponse(res);
+}
+
+export async function deleteDataset(datasetId: string) {
+  const res = await fetch(`${API_URL}/datasets/${datasetId}`, {
+    method: "DELETE",
+    headers: await authHeaders(),
+  });
+  return handleResponse(res);
+}
+
+export async function renameDataset(datasetId: string, displayName: string) {
+  const res = await fetch(`${API_URL}/datasets/${datasetId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+    body: JSON.stringify({ display_name: displayName }),
+  });
+  return handleResponse(res);
 }
 
 export async function getDownloadUrl(datasetId: string, kind: "raw" | "cleaned" = "cleaned") {
   const res = await fetch(`${API_URL}/datasets/${datasetId}/download?kind=${kind}`, {
     headers: await authHeaders(),
   });
-  if (!res.ok) throw new Error(`Download link failed: ${res.status}`);
-  return res.json();
+  return handleResponse(res);
 }

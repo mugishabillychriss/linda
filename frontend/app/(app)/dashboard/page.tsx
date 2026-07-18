@@ -8,6 +8,8 @@ import {
   cleanDataset,
   listDatasets,
   getDownloadUrl,
+  deleteDataset,
+  renameDataset,
 } from "../../../lib/api";
 import Gauge from "../../../components/ui/Gauge";
 import Button from "../../../components/ui/Button";
@@ -32,6 +34,17 @@ const DIMENSION_LABELS: Record<string, string> = {
   integrity: "Integrity",
   timeliness: "Timeliness",
 };
+
+// A small, deliberately messy sample so a first-time user can see the
+// diagnosis flow without needing their own file yet.
+const SAMPLE_CSV = `name,email,age,signup_date,country
+Alice Chen,alice@example.com,29,2024-01-15,USA
+Bob Martinez,bob@example,34,01/16/2024,U.S.A.
+Alice Chen,alice@example.com,29,2024-01-15,USA
+Carla Reyes,carla@example.com,,2024-02-01,usa
+David Kim,not-an-email,150,2024/03/10,USA
+Erin Walsh,erin@example.com,41,2024-03-11,United States
+`;
 
 function currentStageIndex(step: Step) {
   if (step === "upload") return 0;
@@ -70,6 +83,16 @@ export default function Dashboard() {
   const [history, setHistory] = useState<any[]>([]);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [report, setReport] = useState<any>(null);
+  const [slowLoad, setSlowLoad] = useState(false);
+
+  useEffect(() => {
+    if (step !== "diagnosing") {
+      setSlowLoad(false);
+      return;
+    }
+    const timer = setTimeout(() => setSlowLoad(true), 8000);
+    return () => clearTimeout(timer);
+  }, [step]);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -84,9 +107,7 @@ export default function Dashboard() {
     loadHistory();
   }, [loadHistory]);
 
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  async function processFile(file: File) {
     setError("");
     setDiagnosis(null);
     setDownloadUrl(null);
@@ -108,6 +129,41 @@ export default function Dashboard() {
       setError(message);
       notify(message, "error");
       setStep("upload");
+    }
+  }
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    processFile(file);
+  }
+
+  function handleTrySample() {
+    const blob = new Blob([SAMPLE_CSV], { type: "text/csv" });
+    const file = new File([blob], "sample-customers.csv", { type: "text/csv" });
+    processFile(file);
+  }
+
+  async function handleDelete(id: string, filename: string) {
+    if (!confirm(`Delete "${filename}"? This can't be undone.`)) return;
+    try {
+      await deleteDataset(id);
+      notify("Dataset deleted.", "success");
+      loadHistory();
+    } catch (err: any) {
+      notify(err.message || "Delete failed.", "error");
+    }
+  }
+
+  async function handleRename(id: string, currentName: string) {
+    const next = prompt("Rename dataset", currentName);
+    if (!next || next === currentName) return;
+    try {
+      await renameDataset(id, next);
+      notify("Dataset renamed.", "success");
+      loadHistory();
+    } catch (err: any) {
+      notify(err.message || "Rename failed.", "error");
     }
   }
 
@@ -226,15 +282,27 @@ export default function Dashboard() {
                 Choose file
               </span>
             </label>
+            <p className="text-xs text-slate mt-4">
+              New here?{" "}
+              <button onClick={handleTrySample} className="text-signal hover:underline">
+                Try a sample dataset
+              </button>
+            </p>
           </Card>
         )}
 
         {/* Diagnosing */}
         {step === "diagnosing" && (
           <Card className="p-10 text-center">
-            <p className="text-slate text-sm font-mono animate-pulse">
+            <p className="text-slate text-sm font-mono animate-pulse mb-2">
               Analyzing your dataset...
             </p>
+            {slowLoad && (
+              <p className="text-slate text-xs max-w-sm mx-auto">
+                Taking longer than usual? Our server sleeps after periods of inactivity and can
+                take up to a minute to wake up on the first request. Thanks for your patience.
+              </p>
+            )}
           </Card>
         )}
 
@@ -447,12 +515,28 @@ export default function Dashboard() {
           )}
           {history.map((d) => (
             <Card key={d.id} className="p-4">
-              <p className="text-sm font-medium truncate mb-1">{d.filename}</p>
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-start gap-2 mb-1">
+                <p className="text-sm font-medium truncate">{d.display_name || d.filename}</p>
+              </div>
+              <div className="flex justify-between items-center mb-2">
                 <span className="font-mono text-xs text-slate">{d.row_count} rows</span>
                 <span className="font-mono text-xs text-signal">
                   {Math.round(d.quality_score)}
                 </span>
+              </div>
+              <div className="flex gap-3 text-xs">
+                <button
+                  onClick={() => handleRename(d.id, d.display_name || d.filename)}
+                  className="text-slate hover:text-ink transition-colors"
+                >
+                  Rename
+                </button>
+                <button
+                  onClick={() => handleDelete(d.id, d.display_name || d.filename)}
+                  className="text-slate hover:text-alert transition-colors"
+                >
+                  Delete
+                </button>
               </div>
             </Card>
           ))}

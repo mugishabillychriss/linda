@@ -12,6 +12,7 @@ export default function SignupPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
+  const [resent, setResent] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -27,15 +28,29 @@ export default function SignupPage() {
     setDone(true);
   }
 
+  async function handleResend() {
+    setResent(false);
+    const supabase = createClient();
+    await supabase.auth.resend({ type: "signup", email });
+    setResent(true);
+  }
+
   if (done) {
     return (
       <main className="min-h-screen flex items-center justify-center px-6 bg-paper">
         <Card className="w-full max-w-sm p-8 text-center">
           <h1 className="font-display text-2xl font-semibold mb-3">Check your email</h1>
-          <p className="text-slate text-sm">
+          <p className="text-slate text-sm mb-4">
             We sent a confirmation link to <strong className="text-ink">{email}</strong>. Click
             it to activate your account, then log in.
           </p>
+          <button
+            onClick={handleResend}
+            className="text-sm text-signal font-medium hover:underline"
+          >
+            Didn&apos;t get it? Resend email
+          </button>
+          {resent && <p className="text-xs text-mint mt-2">Email resent.</p>}
         </Card>
       </main>
     );

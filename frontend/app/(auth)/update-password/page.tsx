@@ -2,13 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { createClient } from "../../../lib/supabase/client";
 import Button from "../../../components/ui/Button";
 import Card from "../../../components/ui/Card";
 
-export default function LoginPage() {
-  const [email, setEmail] = useState("");
+export default function UpdatePasswordPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -19,14 +17,13 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);
     if (error) {
       setError(error.message);
       return;
     }
     router.push("/dashboard");
-    router.refresh();
   }
 
   return (
@@ -35,28 +32,14 @@ export default function LoginPage() {
         <p className="font-mono text-xs uppercase tracking-widest text-signal mb-2">
           Doctor Linda
         </p>
-        <h1 className="font-display text-2xl font-semibold mb-6">Log in</h1>
+        <h1 className="font-display text-2xl font-semibold mb-6">Set a new password</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1.5">Email</label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full border border-ink/15 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-signal/40 focus:border-signal"
-            />
-          </div>
-          <div>
-            <div className="flex justify-between items-center mb-1.5">
-              <label className="block text-sm font-medium">Password</label>
-              <Link href="/forgot-password" className="text-xs text-signal hover:underline">
-                Forgot password?
-              </Link>
-            </div>
+            <label className="block text-sm font-medium mb-1.5">New password</label>
             <input
               type="password"
               required
+              minLength={6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full border border-ink/15 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-signal/40 focus:border-signal"
@@ -64,15 +47,9 @@ export default function LoginPage() {
           </div>
           {error && <p className="text-sm text-alert">{error}</p>}
           <Button type="submit" disabled={loading} className="w-full">
-            {loading ? "Logging in..." : "Log in"}
+            {loading ? "Updating..." : "Update password"}
           </Button>
         </form>
-        <p className="mt-5 text-sm text-slate">
-          Don&apos;t have an account?{" "}
-          <Link href="/signup" className="text-signal font-medium hover:underline">
-            Sign up
-          </Link>
-        </p>
       </Card>
     </main>
   );

@@ -11,8 +11,11 @@ export default function MarketingFooter() {
         <Link href="/pricing" className="hover:text-ink transition-colors">
           Pricing
         </Link>
-        <Link href="/signup" className="hover:text-ink transition-colors">
-          Get started
+        <Link href="/terms" className="hover:text-ink transition-colors">
+          Terms
+        </Link>
+        <Link href="/privacy" className="hover:text-ink transition-colors">
+          Privacy
         </Link>
       </div>
       <span className="text-xs text-slate font-mono">© 2026 Doctor Linda</span>

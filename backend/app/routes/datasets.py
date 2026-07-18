@@ -19,12 +19,18 @@ from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from pydantic import BaseModel
 
 from app.services.profiler import load_dataframe, profile_dataset
-from app.services.doctor import diagnose
+from app.services.doctor import diagnose, DiagnosisUnavailable
 from app.services.cleaner import apply_operations, preview_operations, jsonable_value
 from app.supabase_client import get_supabase, upload_dataset, download_dataset, get_signed_url
 from app.auth import get_current_user
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
+
+# Beta limits -- generous enough for real testing, small enough that a
+# stray huge file can't take down Render's free-tier memory. Override via
+# env vars in Render if these need to change without a code deploy.
+MAX_UPLOAD_MB = float(os.environ.get("MAX_UPLOAD_MB", "20"))
+MAX_ROWS = int(os.environ.get("MAX_ROWS", "100000"))
 
 
 class CleanRequest(BaseModel):
@@ -42,6 +48,10 @@ class PreviewRequest(BaseModel):
     dataset_id: str
     operation_ids: list[str]
     columns: dict[str, list[str]] = {}
+
+
+class RenameRequest(BaseModel):
+    display_name: str
 
 
 def _build_options(columns: dict[str, list[str]]) -> dict:
@@ -66,14 +76,38 @@ async def upload(file: UploadFile = File(...), user: dict = Depends(get_current_
     dataset_id = str(uuid.uuid4())
     suffix = os.path.splitext(file.filename)[1]
 
+    contents = await file.read()
+    size_mb = len(contents) / (1024 * 1024)
+    if size_mb > MAX_UPLOAD_MB:
+        raise HTTPException(
+            413,
+            f"File is {size_mb:.1f}MB, which is over the {MAX_UPLOAD_MB:.0f}MB beta limit. "
+            "Try a smaller file, or a sample of the full dataset.",
+        )
+
     with NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp.write(await file.read())
+        tmp.write(contents)
         tmp_path = tmp.name
+
+    try:
+        df = load_dataframe(tmp_path)
+    except Exception:
+        os.remove(tmp_path)
+        raise HTTPException(
+            400, "Couldn't read that file. Make sure it's a valid CSV, XLSX, or JSON file."
+        )
+
+    if len(df) > MAX_ROWS:
+        os.remove(tmp_path)
+        raise HTTPException(
+            413,
+            f"Dataset has {len(df):,} rows, which is over the {MAX_ROWS:,}-row beta limit. "
+            "Try a sample of the full dataset for now.",
+        )
 
     storage_path = f"raw/{dataset_id}/{file.filename}"
     upload_dataset(tmp_path, storage_path)
 
-    df = load_dataframe(tmp_path)
     profile = profile_dataset(df)
 
     get_supabase().table("datasets").insert(
@@ -81,6 +115,7 @@ async def upload(file: UploadFile = File(...), user: dict = Depends(get_current_
             "id": dataset_id,
             "owner_id": user["id"],
             "filename": file.filename,
+            "display_name": file.filename,
             "storage_path": storage_path,
             "row_count": profile["row_count"],
             "column_count": profile["column_count"],
@@ -112,7 +147,55 @@ async def get_diagnosis(dataset_id: str, user: dict = Depends(get_current_user))
     profile = profile_dataset(df)
     os.remove(tmp_path)
 
-    return diagnose(profile)
+    try:
+        return diagnose(profile)
+    except DiagnosisUnavailable as e:
+        raise HTTPException(503, str(e))
+
+
+@router.patch("/{dataset_id}")
+async def rename_dataset(
+    dataset_id: str, req: RenameRequest, user: dict = Depends(get_current_user)
+):
+    result = (
+        get_supabase()
+        .table("datasets")
+        .update({"display_name": req.display_name})
+        .eq("id", dataset_id)
+        .eq("owner_id", user["id"])
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(404, "Dataset not found")
+    return result.data[0]
+
+
+@router.delete("/{dataset_id}")
+async def delete_dataset(dataset_id: str, user: dict = Depends(get_current_user)):
+    result = (
+        get_supabase()
+        .table("datasets")
+        .select("*")
+        .eq("id", dataset_id)
+        .eq("owner_id", user["id"])
+        .single()
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(404, "Dataset not found")
+
+    sb = get_supabase()
+    # Best-effort cleanup of both possible storage objects -- the cleaned
+    # file may not exist if the user never ran /clean, which is fine.
+    try:
+        sb.storage.from_(os.environ.get("SUPABASE_STORAGE_BUCKET", "datasets")).remove(
+            [result.data["storage_path"], f"cleaned/{dataset_id}/{result.data['filename']}"]
+        )
+    except Exception:
+        pass
+
+    sb.table("datasets").delete().eq("id", dataset_id).eq("owner_id", user["id"]).execute()
+    return {"deleted": True}
 
 
 @router.get("/{dataset_id}/download")
