@@ -30,6 +30,12 @@ async function handleResponse(res: Response) {
   return res.json();
 }
 
+export async function checkHealth() {
+  const res = await fetch(`${API_URL}/health`, { cache: "no-store" });
+  if (!res.ok) throw new Error("Health check failed");
+  return res.json();
+}
+
 export async function uploadDataset(file: File) {
   const form = new FormData();
   form.append("file", file);

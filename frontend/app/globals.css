@@ -1,3 +1,32 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --color-ink: #14171a;
+  --color-paper: #fafaf8;
+  --color-surface: #ffffff;
+  --color-slate: #6b7280;
+  --color-signal: #0f6e6e;
+  --color-signal-dark: #0b5555;
+  --color-alert: #c24a3b;
+  --color-mint: #3f9b6e;
+  --color-amber: #d6a93a;
+}
+
+.dark {
+  --color-ink: #f2f3f3;
+  --color-paper: #0f1211;
+  --color-surface: #171b1a;
+  --color-slate: #8b9491;
+  --color-signal: #14b8a6;
+  --color-signal-dark: #0d9488;
+  --color-alert: #f87171;
+  --color-mint: #4ade80;
+  --color-amber: #eab938;
+}
+
+/* Smooth theme transitions rather than an abrupt flash when toggling. */
+body {
+  transition: background-color 0.15s ease, color 0.15s ease;
+}

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Button from "./ui/Button";
+import ThemeToggle from "./ThemeToggle";
 
 export default function MarketingNav() {
   return (
@@ -14,8 +15,12 @@ export default function MarketingNav() {
         <Link href="/pricing" className="hover:text-ink transition-colors">
           Pricing
         </Link>
+        <Link href="/docs" className="hover:text-ink transition-colors">
+          Docs
+        </Link>
       </div>
       <div className="flex items-center gap-3">
+        <ThemeToggle />
         <Link href="/login">
           <Button variant="ghost">Log in</Button>
         </Link>

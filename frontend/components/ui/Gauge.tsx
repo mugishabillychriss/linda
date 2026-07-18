@@ -23,9 +23,9 @@ export default function Gauge({ score, size = 200, label }: GaugeProps) {
     <svg viewBox={`0 0 ${size} ${size * 0.62}`} width={size} height={size * 0.62}>
       <defs>
         <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#C24A3B" />
-          <stop offset="50%" stopColor="#D6A93A" />
-          <stop offset="100%" stopColor="#0F6E6E" />
+          <stop offset="0%" stopColor="var(--color-alert)" />
+          <stop offset="50%" stopColor="var(--color-amber)" />
+          <stop offset="100%" stopColor="var(--color-signal)" />
         </linearGradient>
       </defs>
       <path
@@ -40,11 +40,11 @@ export default function Gauge({ score, size = 200, label }: GaugeProps) {
         y1={cy}
         x2={needleX}
         y2={needleY}
-        stroke="#14171A"
+        stroke="var(--color-ink)"
         strokeWidth={size * 0.015}
         strokeLinecap="round"
       />
-      <circle cx={cx} cy={cy} r={size * 0.02} fill="#14171A" />
+      <circle cx={cx} cy={cy} r={size * 0.02} fill="var(--color-ink)" />
       <text
         x={cx}
         y={cy - size * 0.12}
@@ -52,7 +52,7 @@ export default function Gauge({ score, size = 200, label }: GaugeProps) {
         className="font-display"
         fontSize={size * 0.16}
         fontWeight={600}
-        fill="#14171A"
+        fill="var(--color-ink)"
       >
         {Math.round(clamped)}
       </text>
@@ -63,7 +63,7 @@ export default function Gauge({ score, size = 200, label }: GaugeProps) {
           textAnchor="middle"
           className="font-mono"
           fontSize={size * 0.06}
-          fill="#6B7280"
+          fill="var(--color-slate)"
         >
           {label}
         </text>

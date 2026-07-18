@@ -27,6 +27,25 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${fraunces.variable} ${inter.variable} ${plexMono.variable}`}>
+      <head>
+        {/* Runs before paint to avoid a light-mode flash for users who
+            prefer/saved dark mode. Reads the same localStorage key and
+            media query that ThemeToggle uses. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var stored = localStorage.getItem('theme');
+                  var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                  var dark = stored ? stored === 'dark' : prefersDark;
+                  if (dark) document.documentElement.classList.add('dark');
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
+      </head>
       <body className="font-body bg-paper text-ink">
         <ToastProvider>{children}</ToastProvider>
       </body>

@@ -14,6 +14,7 @@ import {
 import Gauge from "../../../components/ui/Gauge";
 import Button from "../../../components/ui/Button";
 import Card from "../../../components/ui/Card";
+import CodeBlock from "../../../components/ui/CodeBlock";
 import { useToast } from "../../../components/ui/Toast";
 
 type Step = "upload" | "diagnosing" | "diagnosed" | "cleaning" | "cleaned";
@@ -21,7 +22,7 @@ type Step = "upload" | "diagnosing" | "diagnosed" | "cleaning" | "cleaned";
 const SEVERITY_STYLES: Record<string, string> = {
   critical: "bg-alert/10 text-alert border-alert/30",
   high: "bg-alert/10 text-alert border-alert/20",
-  medium: "bg-[#D6A93A]/10 text-[#8a6d1f] border-[#D6A93A]/30",
+  medium: "bg-amber/10 text-amber border-amber/30",
   low: "bg-mint/10 text-mint border-mint/30",
 };
 
@@ -84,6 +85,7 @@ export default function Dashboard() {
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [report, setReport] = useState<any>(null);
   const [slowLoad, setSlowLoad] = useState(false);
+  const [showRawJson, setShowRawJson] = useState(false);
 
   useEffect(() => {
     if (step !== "diagnosing") {
@@ -336,6 +338,20 @@ export default function Dashboard() {
                   </ul>
                 </div>
               )}
+
+              <div className="mt-5 pt-5 border-t border-ink/10">
+                <button
+                  onClick={() => setShowRawJson((v) => !v)}
+                  className="font-mono text-xs text-slate hover:text-ink transition-colors"
+                >
+                  {showRawJson ? "▾" : "▸"} View raw JSON
+                </button>
+                {showRawJson && (
+                  <div className="mt-3">
+                    <CodeBlock code={JSON.stringify(diagnosis, null, 2)} language="json" />
+                  </div>
+                )}
+              </div>
             </Card>
 
             <Card className="p-6">
